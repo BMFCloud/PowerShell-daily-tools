@@ -1,3 +1,10 @@
+# InfraTools.psm1
+# PowerShell Toolkit Module
+# Author: Brandon Fortunato
+
+# -------------------------------
+# Set-AppHttpsEnforcement
+# -------------------------------
 function Set-AppHttpsEnforcement {
     [CmdletBinding()]
     param (
@@ -16,16 +23,97 @@ function Set-AppHttpsEnforcement {
 
     Write-Host "Updating configuration files for HTTPS enforcement..."
 
-    # Replace in web.config
     (Get-Content $WebConfigPath) -replace "http://$FQDN", "https://$FQDN" | Set-Content $WebConfigPath
     (Get-Content $WebConfigPath) -replace "http://localhost/Framework/SoapEventService.asmx", "https://localhost/Framework/SoapEventService.asmx" | Set-Content $WebConfigPath
     (Get-Content $WebConfigPath) -replace "https://$FQDN/Framework/Designer.asmx", "http://$FQDN/Framework/Designer.asmx" | Set-Content $WebConfigPath
 
-    # Replace in sqlservr.exe.config
     (Get-Content $SqlConfigPath) -replace "http://127.0.0.1/Framework/ManagedModules.asmx", "https://$FQDN/Framework/ManagedModules.asmx" | Set-Content $SqlConfigPath
-
-    # Replace in components config
     (Get-Content $ComponentConfigPath) -replace "http://$FQDN", "https://$FQDN" | Set-Content $ComponentConfigPath
 
     Write-Host "✔️ HTTPS updates applied to all config files."
+}
+
+# -------------------------------
+# Export-GuidBatchFiles
+# -------------------------------
+function Export-GuidBatchFiles {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$true)]
+        [string]$SqlServer = "localhost",
+
+        [Parameter(Mandatory=$true)]
+        [string]$Database = "YourDatabase",
+
+        [Parameter(Mandatory=$true)]
+        [string]$Query,
+
+        [Parameter(Mandatory=$true)]
+        [string]$OutputFolder,
+
+        [string]$LogFolder = "$PSScriptRoot\logs"
+    )
+
+    if (-not (Test-Path $LogFolder)) { New-Item -ItemType Directory -Path $LogFolder | Out-Null }
+    if (-not (Test-Path $OutputFolder)) { New-Item -ItemType Directory -Path $OutputFolder | Out-Null }
+
+    $date = Get-Date -Format "yyyy-MM-dd"
+    $logfile = Join-Path $LogFolder "$date.log"
+
+    function Write-Log {
+        param ([string]$Message)
+        "$((Get-Date).ToString('u')) $Message" | Out-File $logfile -Append
+    }
+
+    Write-Log "Executing query against $Database on $SqlServer"
+    $results = Invoke-Sqlcmd -ServerInstance $SqlServer -Database $Database -Query $Query -ErrorAction Stop
+
+    Write-Log "Retrieved $($results.Count) results."
+
+    foreach ($row in $results) {
+        $guid = $row[0].ToString().Trim()
+        if (-not [string]::IsNullOrWhiteSpace($guid)) {
+            $filePath = Join-Path $OutputFolder "$guid.txt"
+            Set-Content -Path $filePath -Value $guid
+        }
+    }
+
+    Write-Log "All individual GUID files written to $OutputFolder"
+}
+
+# -------------------------------
+# Copy-NetworkFolders
+# -------------------------------
+function Copy-NetworkFolders {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$true)]
+        [string]$SourcePrefix,
+
+        [Parameter(Mandatory=$true)]
+        [string]$DestPrefix,
+
+        [Parameter(Mandatory=$true)]
+        [string]$Username,
+
+        [string]$LogFolder = "$PSScriptRoot\logs"
+    )
+
+    $paths = @(
+        @{ Name = "SharedRoot"; Source = "\\$SourcePrefix\SharedRoot"; Dest = "\\$DestPrefix\SharedRoot"; Log = "SharedRoot.log" },
+        @{ Name = "Backup"; Source = "\\$SourcePrefix\Backup"; Dest = "\\$DestPrefix\Backup"; Log = "Backup.log" },
+        @{ Name = "Documents"; Source = "\\$SourcePrefix\c$\Users\$Username\Documents"; Dest = "\\$DestPrefix\c$\Users\$Username\Documents"; Log = "Documents.log" },
+        @{ Name = "Desktop"; Source = "\\$SourcePrefix\c$\Users\$Username\Desktop"; Dest = "\\$DestPrefix\c$\Users\$Username\Desktop"; Log = "Desktop.log" }
+    )
+
+    if (-not (Test-Path $LogFolder)) {
+        New-Item -ItemType Directory -Path $LogFolder | Out-Null
+    }
+
+    foreach ($item in $paths) {
+        $logPath = Join-Path $LogFolder $item.Log
+        Write-Host "Starting copy: $($item.Source) -> $($item.Dest)"
+        Start-Process robocopy -ArgumentList "`"$($item.Source)`" `"$($item.Dest)`" /MIR /FFT /XO /Z /W:3 /TEE /LOG+:$logPath" -NoNewWindow -Wait
+        Write-Host "Finished: $($item.Name)"
+    }
 }
