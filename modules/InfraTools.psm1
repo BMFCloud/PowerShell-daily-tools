@@ -8,16 +8,16 @@
 function Set-AppHttpsEnforcement {
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         [string]$FQDN,
 
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         [string]$WebConfigPath,
 
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         [string]$ComponentConfigPath,
 
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         [string]$SqlConfigPath
     )
 
@@ -39,16 +39,16 @@ function Set-AppHttpsEnforcement {
 function Export-GuidBatchFiles {
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         [string]$SqlServer = "localhost",
 
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         [string]$Database = "YourDatabase",
 
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         [string]$Query,
 
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         [string]$OutputFolder,
 
         [string]$LogFolder = "$PSScriptRoot\logs"
@@ -87,13 +87,13 @@ function Export-GuidBatchFiles {
 function Copy-NetworkFolders {
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         [string]$SourcePrefix,
 
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         [string]$DestPrefix,
 
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         [string]$Username,
 
         [string]$LogFolder = "$PSScriptRoot\logs"
@@ -115,5 +115,41 @@ function Copy-NetworkFolders {
         Write-Host "Starting copy: $($item.Source) -> $($item.Dest)"
         Start-Process robocopy -ArgumentList "`"$($item.Source)`" `"$($item.Dest)`" /MIR /FFT /XO /Z /W:3 /TEE /LOG+:$logPath" -NoNewWindow -Wait
         Write-Host "Finished: $($item.Name)"
+    }
+}
+# -------------------------------
+# Copy-NetworkFoldersLive
+# -------------------------------
+function Copy-NetworkFoldersLive {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$SourcePrefix,
+
+        [Parameter(Mandatory = $true)]
+        [string]$DestPrefix,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Username,
+
+        [string]$LogFolder = "$PSScriptRoot\logs"
+    )
+
+    $paths = @(
+        @{ Name = "SharedRoot"; Source = "\\$SourcePrefix\SharedRoot"; Dest = "\\$DestPrefix\SharedRoot"; Log = "SharedRootLive.log" },
+        @{ Name = "Backup"; Source = "\\$SourcePrefix\Backup"; Dest = "\\$DestPrefix\Backup"; Log = "BackupLive.log" },
+        @{ Name = "Documents"; Source = "\\$SourcePrefix\c$\Users\$Username\Documents"; Dest = "\\$DestPrefix\c$\Users\$Username\Documents"; Log = "DocumentsLive.log" },
+        @{ Name = "Desktop"; Source = "\\$SourcePrefix\c$\Users\$Username\Desktop"; Dest = "\\$DestPrefix\c$\Users\$Username\Desktop"; Log = "DesktopLive.log" }
+    )
+
+    if (-not (Test-Path $LogFolder)) {
+        New-Item -ItemType Directory -Path $LogFolder | Out-Null
+    }
+
+    foreach ($item in $paths) {
+        $logPath = Join-Path $LogFolder $item.Log
+        Write-Host "Starting live monitor: $($item.Source) -> $($item.Dest)"
+        Start-Process robocopy -ArgumentList "`"$($item.Source)`" `"$($item.Dest)`" /MIR /MON:1 /FFT /XO /Z /W:3 /TEE /LOG+:$logPath" -NoNewWindow -Wait
+        Write-Host "Monitoring started for: $($item.Name)"
     }
 }
