@@ -1,0 +1,9 @@
+{
+  "files.encoding": "utf8",
+  "files.insertFinalNewline": true,
+  "editor.formatOnSave": true,
+  "powershell.scriptAnalysis.enable": true,
+  "powershell.codeFormatting.preset": "OTBS",
+  "files.eol": "\n",
+  "terminal.integrated.defaultProfile.windows": "PowerShell"
+}
