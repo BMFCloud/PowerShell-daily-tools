@@ -153,3 +153,44 @@ function Copy-NetworkFoldersLive {
         Write-Host "Monitoring started for: $($item.Name)"
     }
 }
+# -------------------------------
+# Get-SpeculationMitigationStatus
+# -------------------------------
+function Get-SpeculationMitigationStatus {
+    [CmdletBinding()]
+    param ()
+
+    $output = @()
+
+    $regPaths = @(
+        "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management",
+        "HKLM:\HARDWARE\DESCRIPTION\System\CentralProcessor\0",
+        "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Virtualization"
+    )
+
+    foreach ($path in $regPaths) {
+        if (Test-Path $path) {
+            $props = Get-ItemProperty -Path $path | Select-Object *
+            $output += "=== $path ==="
+            $props.PSObject.Properties | ForEach-Object {
+                $output += "$($_.Name): $($_.Value)"
+            }
+            $output += ""
+        }
+    }
+
+    try {
+        $speculationCmd = Get-Command Get-SpeculationControlSettings -ErrorAction SilentlyContinue
+        if ($speculationCmd) {
+            $output += "=== Get-SpeculationControlSettings Results ==="
+            $result = Get-SpeculationControlSettings
+            $output += $result | Out-String
+        } else {
+            $output += "Get-SpeculationControlSettings cmdlet not available. Install it via Windows update or manual import."
+        }
+    } catch {
+        $output += "Error executing Get-SpeculationControlSettings: $_"
+    }
+
+    return $output -join "`n"
+}
